@@ -1,11 +1,11 @@
 const express = require('express');
-const mongoose = require('mongoose');
 const session = require('express-session');
 const passport = require('passport');
 const GoogleStrategy = require('passport-google-oauth20').Strategy;
 const cors = require('cors');
 require('dotenv').config();
-const connectDB = require('./utils/connect');
+
+const db = require('./utils/firebase'); // Firebase setup
 
 const app = express();
 
@@ -27,8 +27,24 @@ passport.use(new GoogleStrategy({
   clientID: process.env.GOOGLE_CLIENT_ID,
   clientSecret: process.env.GOOGLE_CLIENT_SECRET,
   callbackURL: '/auth/google/callback'
-}, (accessToken, refreshToken, profile, done) => {
-  return done(null, profile);
+}, async (accessToken, refreshToken, profile, done) => {
+  try {
+    const userRef = db.collection('users').doc(profile.id);
+    const doc = await userRef.get();
+
+    if (!doc.exists) {
+      await userRef.set({
+        id: profile.id,
+        name: profile.displayName,
+        email: profile.emails[0].value,
+        photo: profile.photos[0].value
+      });
+    }
+
+    return done(null, profile);
+  } catch (error) {
+    return done(error, null);
+  }
 }));
 
 passport.serializeUser((user, done) => {
@@ -70,8 +86,6 @@ app.get('/logout', (req, res) => {
 
 const PORT = process.env.PORT || 5000;
 
-connectDB().then(() => {
-  app.listen(PORT, () => {
-    console.log(`Server running on port ${PORT}`);
-  });
+app.listen(PORT, () => {
+  console.log(`🔥 Server running on port ${PORT}`);
 });
