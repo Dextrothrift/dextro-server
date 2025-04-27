@@ -12,6 +12,10 @@ app.set('trust proxy', 1);
 
 // --- CORS Setup: allow production + preview domains ---
 const allowedOrigins = [
+  'https://dextro-store.vercel.app',
+  'https://www.dextro.store',
+  // add any preview domains here, e.g.:
+  'https://dextro-store-8c9ivrtlf-dextros-projects-e14cac6e.vercel.app',
   process.env.FRONTEND_URL,
   ...(process.env.ADDITIONAL_ORIGINS || '').split(',').filter(Boolean)
 ];
