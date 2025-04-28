@@ -1,12 +1,12 @@
 const express = require('express');
-const admin = require('firebase-admin');
+const { OAuth2Client } = require('google-auth-library');
 const cors = require('cors');
 require('dotenv').config();
 
 const app = express();
 app.set('trust proxy', 1);
 
-// --- CORS Setup: allow production + preview domains ---
+// CORS Setup
 const allowedOrigins = [
   'https://dextro-store.vercel.app',
   'https://www.dextro.store',
@@ -16,41 +16,45 @@ const allowedOrigins = [
 ];
 app.use(cors({
   origin: (origin, callback) => {
-    if (!origin) return callback(null, true);
-    if (allowedOrigins.includes(origin)) return callback(null, true);
+    if (!origin || allowedOrigins.includes(origin)) return callback(null, true);
     console.warn('Blocked CORS request from:', origin);
     return callback(new Error('CORS Not Allowed'), false);
   },
   credentials: true
 }));
 
-// --- Initialize Firebase Admin SDK ---
-admin.initializeApp({
-  credential: admin.credential.cert(JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT))
+// Google OAuth2 Client
+const client = new OAuth2Client(
+  process.env.GOOGLE_CLIENT_ID,
+  process.env.GOOGLE_CLIENT_SECRET,
+  process.env.GOOGLE_CALLBACK_URL // e.g., 'https://dextro-server.onrender.com/auth/google/callback'
+);
+
+// Route to start Google OAuth
+app.get('/auth/google', (req, res) => {
+  const url = client.generateAuthUrl({
+    access_type: 'offline',
+    scope: ['https://www.googleapis.com/auth/userinfo.profile', 'https://www.googleapis.com/auth/userinfo.email'],
+  });
+  res.redirect(url);
 });
 
-// --- Middleware to verify Firebase ID token ---
-const verifyIdToken = async (req, res, next) => {
-  const idToken = req.headers.authorization?.split('Bearer ')[1];
-  if (!idToken) return res.status(401).send('Unauthorized');
-
+// Callback route after Google OAuth
+app.get('/auth/google/callback', async (req, res) => {
+  const code = req.query.code;
   try {
-    const decodedToken = await admin.auth().verifyIdToken(idToken);
-    req.user = decodedToken;
-    next();
+    const { tokens } = await client.getToken(code);
+    const idToken = tokens.id_token;
+    // Redirect back to frontend with idToken
+    res.redirect(`https://www.dextro.store/front2.html?token=${idToken}`);
   } catch (error) {
-    res.status(401).send('Unauthorized');
+    console.error('Error exchanging code for tokens:', error);
+    res.status(500).send('Authentication failed');
   }
-};
-
-// --- Example Protected Route ---
-app.get('/api/protected', verifyIdToken, (req, res) => {
-  res.json({ message: 'This is a protected route', user: req.user });
 });
 
-// --- Health Check ---
+// Health Check
 app.get('/', (req, res) => res.send('Auth server is running'));
 
-// --- Start Server ---
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => console.log(`Auth server listening on port ${PORT}`));
