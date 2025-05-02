@@ -2,14 +2,19 @@ const express = require('express');
 const { OAuth2Client } = require('google-auth-library');
 const cors = require('cors');
 const multer = require('multer');
-const admin = require('./utils/firebase');
-
+const admin = require('./utils/firebase'); // Assuming this exports initialized Firebase Admin SDK
 require('dotenv').config();
+
+// Define PORT at the top
+const PORT = process.env.PORT || 5000;
 
 const app = express();
 app.set('trust proxy', 1);
 app.use(express.json());
+
+// Multer setup for file uploads
 const upload = multer({ dest: 'uploads/' });
+
 // CORS Setup
 const allowedOrigins = [
   'https://dextro-store.vercel.app',
@@ -60,7 +65,7 @@ app.get('/auth/google/callback', async (req, res) => {
 // Health Check
 app.get('/', (req, res) => res.send('Auth server is running'));
 
-app.listen(PORT, () => console.log(`Auth server listening on port ${PORT}`));
+// Products endpoint to save product data
 app.post('/api/products', upload.single('productPicture'), async (req, res) => {
   const token = req.headers.authorization?.split('Bearer ')[1];
   if (!token) return res.status(401).json({ error: 'Unauthorized' });
@@ -77,7 +82,7 @@ app.post('/api/products', upload.single('productPicture'), async (req, res) => {
       userId: decodedToken.uid,
       createdAt: new Date().toISOString()
     };
-    // Save productData to your database (e.g., Firestore or MongoDB)
+    // TODO: Save productData to your database (e.g., Firestore or MongoDB)
     console.log('Product Data:', productData);
     res.status(200).json({ message: 'Product submitted successfully' });
   } catch (error) {
@@ -86,5 +91,5 @@ app.post('/api/products', upload.single('productPicture'), async (req, res) => {
   }
 });
 
-const PORT = process.env.PORT || 5000;
+// Start the server
 app.listen(PORT, () => console.log(`Auth server listening on port ${PORT}`));
