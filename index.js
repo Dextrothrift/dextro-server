@@ -2,7 +2,7 @@ const express = require('express');
 const { OAuth2Client } = require('google-auth-library');
 const cors = require('cors');
 const multer = require('multer');
-const admin = require('./utils/firebase'); // Ensure this exports initialized Firebase Admin SDK
+const admin = require('./utils/firebase'); // This exports the initialized Firebase Admin SDK
 require('dotenv').config();
 
 const PORT = process.env.PORT || 5000;
@@ -11,8 +11,7 @@ const app = express();
 app.set('trust proxy', 1);
 app.use(express.json());
 
-// Initialize Firestore
-admin.initializeApp({ credential: admin.credential.applicationDefault() });
+// Initialize Firestore using the already initialized admin
 const db = admin.firestore();
 
 // Multer setup for file uploads
