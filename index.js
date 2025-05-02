@@ -12,6 +12,7 @@ app.set('trust proxy', 1);
 app.use(express.json());
 
 // Initialize Firestore
+admin.initializeApp({ credential: admin.credential.applicationDefault() });
 const db = admin.firestore();
 
 // Multer setup for file uploads
@@ -101,7 +102,8 @@ app.post('/api/products', upload.single('productPicture'), async (req, res) => {
 // Fetch products endpoint for cycles.html
 app.get('/api/products', async (req, res) => {
   try {
-    const snapshot = await db.collection('products').where('category', '==', 'cycles').get();
+    const category = req.query.category || 'cycles';
+    const snapshot = await db.collection('products').where('category', '==', category).get();
     const products = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
     res.status(200).json(products);
   } catch (error) {
