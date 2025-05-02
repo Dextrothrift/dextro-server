@@ -1,11 +1,15 @@
 const express = require('express');
 const { OAuth2Client } = require('google-auth-library');
 const cors = require('cors');
+const multer = require('multer');
+const admin = require('./utils/firebase');
+
 require('dotenv').config();
 
 const app = express();
 app.set('trust proxy', 1);
-
+app.use(express.json());
+const upload = multer({ dest: 'uploads/' });
 // CORS Setup
 const allowedOrigins = [
   'https://dextro-store.vercel.app',
@@ -55,6 +59,32 @@ app.get('/auth/google/callback', async (req, res) => {
 
 // Health Check
 app.get('/', (req, res) => res.send('Auth server is running'));
+
+app.listen(PORT, () => console.log(`Auth server listening on port ${PORT}`));
+app.post('/api/products', upload.single('productPicture'), async (req, res) => {
+  const token = req.headers.authorization?.split('Bearer ')[1];
+  if (!token) return res.status(401).json({ error: 'Unauthorized' });
+
+  try {
+    const decodedToken = await admin.auth().verifyIdToken(token);
+    const productData = {
+      productName: req.body.productName,
+      description: req.body.description,
+      mobile: req.body.mobile,
+      price: req.body.price,
+      category: req.body.category,
+      productPicture: req.file ? req.file.path : null,
+      userId: decodedToken.uid,
+      createdAt: new Date().toISOString()
+    };
+    // Save productData to your database (e.g., Firestore or MongoDB)
+    console.log('Product Data:', productData);
+    res.status(200).json({ message: 'Product submitted successfully' });
+  } catch (error) {
+    console.error('Error verifying token:', error);
+    res.status(401).json({ error: 'Invalid token' });
+  }
+});
 
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => console.log(`Auth server listening on port ${PORT}`));
