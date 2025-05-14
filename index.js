@@ -1,21 +1,24 @@
-// server.js
 const express = require('express');
 const { OAuth2Client } = require('google-auth-library');
 const cors = require('cors');
 const multer = require('multer');
-const { admin, bucket } = require('./utils/firebase'); // Updated import for Firebase Admin and Storage
+const admin = require('./utils/firebase'); // This exports the initialized Firebase Admin SDK
 require('dotenv').config();
 
 const PORT = process.env.PORT || 5000;
+
 const app = express();
 app.set('trust proxy', 1);
 app.use(express.json());
 
+// Initialize Firestore using the already initialized admin
 const db = admin.firestore();
 
-// Multer setup for in-memory file storage
-const storage = multer.memoryStorage();
-const upload = multer({ storage });
+// Multer setup for file uploads
+const upload = multer({ dest: 'uploads/' });
+
+// Serve uploaded images statically
+app.use('/uploads', express.static('uploads'));
 
 // CORS Setup
 const allowedOrigins = [
@@ -45,10 +48,7 @@ const client = new OAuth2Client(
 app.get('/auth/google', (req, res) => {
   const url = client.generateAuthUrl({
     access_type: 'offline',
-    scope: [
-      'https://www.googleapis.com/auth/userinfo.profile',
-      'https://www.googleapis.com/auth/userinfo.email'
-    ],
+    scope: ['https://www.googleapis.com/auth/userinfo.profile', 'https://www.googleapis.com/auth/userinfo.email'],
   });
   res.redirect(url);
 });
@@ -69,43 +69,28 @@ app.get('/auth/google/callback', async (req, res) => {
 // Health Check
 app.get('/', (req, res) => res.send('Auth server is running'));
 
-// Products endpoint to save product data to Firestore and Firebase Storage
+// Products endpoint to save product data to Firestore
 app.post('/api/products', upload.single('productPicture'), async (req, res) => {
   const token = req.headers.authorization?.split('Bearer ')[1];
   if (!token) return res.status(401).json({ error: 'Unauthorized' });
 
   try {
     const decodedToken = await admin.auth().verifyIdToken(token);
-    let imageUrl = null;
-
-    if (req.file) {
-      const blob = bucket.file(Date.now() + '-' + req.file.originalname);
-      const blobStream = blob.createWriteStream({
-        metadata: {
-          contentType: req.file.mimetype
-        }
-      });
-
-      await new Promise((resolve, reject) => {
-        blobStream.on('finish', resolve).on('error', reject).end(req.file.buffer);
-      });
-
-      await blob.makePublic();
-      imageUrl = `https://storage.googleapis.com/${bucket.name}/${blob.name}`;
-    }
-
     const productData = {
       productName: req.body.productName,
       description: req.body.description,
       mobile: req.body.mobile,
       price: parseFloat(req.body.price),
       category: req.body.category,
-      productPicture: imageUrl,
+      productPicture: req.file ? `/uploads/${req.file.filename}` : null,
       userId: decodedToken.uid,
       createdAt: admin.firestore.FieldValue.serverTimestamp()
     };
 
+    // Save to Firestore
     const docRef = await db.collection('products').add(productData);
+    console.log('Product added with ID:', docRef.id);
+
     res.status(200).json({ message: 'Product submitted successfully', productId: docRef.id });
   } catch (error) {
     console.error('Error saving product:', error);
@@ -113,7 +98,7 @@ app.post('/api/products', upload.single('productPicture'), async (req, res) => {
   }
 });
 
-// Fetch products endpoint
+// Fetch products endpoint for cycles.html
 app.get('/api/products', async (req, res) => {
   try {
     const category = req.query.category || 'cycles';
